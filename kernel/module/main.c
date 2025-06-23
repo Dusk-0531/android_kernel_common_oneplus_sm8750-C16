@@ -2879,10 +2879,6 @@ static int early_mod_check(struct load_info *info, int flags)
 	 * Now that we know we have the correct module name, check
 	 * if it's blacklisted.
 	 */
-	if (blacklisted(info->name)) {
-		pr_err("Module %s is blacklisted\n", info->name);
-		return -EPERM;
-	}
 
 	err = rewrite_section_headers(info, flags);
 	if (err)
@@ -2943,6 +2939,11 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	err = early_mod_check(info, flags);
 	if (err)
 		goto free_copy;
+    
+    if (blacklisted(info->name)) {
+		pr_err("Module %s is blacklisted\n", info->name);
+		goto free_copy;
+	}
 
 	/* Figure out module layout, and allocate all the memory. */
 	mod = layout_and_allocate(info, flags);
