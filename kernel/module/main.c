@@ -2385,6 +2385,19 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
 
 /* module_blacklist is a comma-separated list of module names */
 static char *module_blacklist;
+static char *custom_module_blacklist[] = {
+#if IS_BUILTIN(CONFIG_CRYPTO_LZO)
+    "lzo", "lzo_rle",
+#endif
+#if IS_BUILTIN(CONFIG_ZRAM)
+	"oplus_bsp_hybridswap_zram",
+	"oplus_bsp_zram_opt",
+#endif
+#if IS_BUILTIN(CONFIG_ZSMALLOC)
+    "oplus_bsp_zsmalloc",
+#endif
+};
+
 static bool blacklisted(const char *module_name)
 {
 	const char *p;
