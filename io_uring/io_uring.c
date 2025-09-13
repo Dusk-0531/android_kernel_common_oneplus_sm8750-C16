@@ -1935,6 +1935,7 @@ static inline int __io_issue_sqe(struct io_kiocb *req,
 				 const struct io_issue_def *def)
 {
 	const struct cred *creds = NULL;
+	struct io_kiocb *link = NULL;
 	int ret;
 
 	if (unlikely(req->flags & REQ_ISSUE_SLOW_FLAGS)) {
@@ -1952,8 +1953,12 @@ static inline int __io_issue_sqe(struct io_kiocb *req,
 	if (!def->audit_skip)
 		audit_uring_exit(!ret, ret);
 
-	if (creds)
-		revert_creds(creds);
+	if (unlikely(creds || link)) {
+		if (creds)
+			revert_creds(creds);
+		if (link)
+			io_queue_linked_timeout(link);
+		}
 
 	return ret;
 }
