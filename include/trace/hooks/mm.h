@@ -627,6 +627,9 @@ DECLARE_HOOK(android_vh_pageset_update,
 DECLARE_HOOK(android_vh_mm_customize_lru_add_dst,
 	TP_PROTO(struct lruvec *lruvec, struct folio *src, struct folio *dst, bool *added),
 	TP_ARGS(lruvec, src, dst, added));
+DECLARE_HOOK(android_vh_oom_reaper_delay_bypass,
+	TP_PROTO(struct task_struct *tsk, bool *bypass),
+	TP_ARGS(tsk, bypass));
 #endif /* _TRACE_HOOK_MM_H */
 
 /* This part must be outside protection */
