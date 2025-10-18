@@ -2022,3 +2022,10 @@ source "init/Kconfig.gki"
 
 endif
 source "init/Kconfig.gki-debug"
+
+menu "BrokeStar"
+
+config ORYON_1
+	bool
+
+endmenu
