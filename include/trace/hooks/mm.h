@@ -612,6 +612,9 @@ DECLARE_HOOK(android_vh_folio_remove_rmap_ptes,
 DECLARE_HOOK(android_vh_pageset_update,
 	TP_PROTO(unsigned long *high, unsigned long *batch),
 	TP_ARGS(high, batch));
+DECLARE_HOOK(android_vh_mm_customize_lru_add_dst,
+	TP_PROTO(struct lruvec *lruvec, struct folio *src, struct folio *dst, bool *added),
+	TP_ARGS(lruvec, src, dst, added));
 #endif /* _TRACE_HOOK_MM_H */
 
 /* This part must be outside protection */
