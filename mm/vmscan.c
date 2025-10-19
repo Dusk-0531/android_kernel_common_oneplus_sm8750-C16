@@ -531,7 +531,7 @@ static bool root_reclaim(struct scan_control *sc)
 
 static bool writeback_throttling_sane(struct scan_control *sc)
 {
-	return true;
+	return READ_ONCE(vm_swappiness);
 }
 #endif
 
@@ -3395,7 +3395,7 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	ap = swappiness * (total_cost + 1);
 	ap /= anon_cost + 1;
 
-	fp = (200 - swappiness) * (total_cost + 1);
+	fp = (MAX_SWAPPINESS - swappiness) * (total_cost + 1);
 	fp /= file_cost + 1;
 
 	fraction[0] = ap;
@@ -6525,7 +6525,8 @@ static int run_cmd(char cmd, int memcg_id, int nid, unsigned long seq,
 
 	if (swappiness < 0)
 		swappiness = get_swappiness(lruvec, sc);
-	else if (swappiness > 200)
+	else if (swappiness > MAX_SWAPPINESS)
+
 		goto done;
 
 	switch (cmd) {
