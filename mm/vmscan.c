@@ -6523,10 +6523,9 @@ static int run_cmd(char cmd, int memcg_id, int nid, unsigned long seq,
 
 	lruvec = get_lruvec(memcg, nid);
 
-	if (swappiness < 0)
+	if (swappiness < MIN_SWAPPINESS)
 		swappiness = get_swappiness(lruvec, sc);
 	else if (swappiness > MAX_SWAPPINESS)
-
 		goto done;
 
 	switch (cmd) {
