@@ -2697,7 +2697,7 @@ static int zram_add(void)
 		goto out_cleanup_disk;
 
 	zram_debugfs_register(zram);
-	pr_info("Added device: %s\n", zram->disk->disk_name);
+	pr_info("Added device: %s with default size %llu bytes\n", zram->disk->disk_name, default_disksize);
 	return device_id;
 lru_fail:
 	unregister_shrinker(zram->zram_shrinker);
@@ -2740,7 +2740,7 @@ static int zram_remove(struct zram *zram)
 		zram_reset_device(zram);
 	}
 
-	pr_info("Removed device: %s\n", zram->disk->disk_name, default_disksize);
+	pr_info("Removed device: %s\n", zram->disk->disk_name);
 
 	del_gendisk(zram->disk);
 
