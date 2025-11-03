@@ -159,6 +159,13 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 	unsigned long next_freq = 0;
 
 	util = map_util_perf(util);
+	if (util < (max * 50 / 1024)) { // 利用率低于1%
+		// 直接使用最低频率
+		freq = policy->min;
+	} else {
+		// 原有逻辑
+		freq = map_util_freq(util, freq, max);
+	}
 	trace_android_vh_map_util_freq(util, freq, max, &next_freq, policy,
 			&sg_policy->need_freq_update);
 	if (next_freq)
@@ -288,7 +295,7 @@ static void sugov_iowait_apply(struct sugov_cpu *sg_cpu, u64 time,
 		/*
 		 * No boost pending; reduce the boost value.
 		 */
-		sg_cpu->iowait_boost >>= 1;
+		sg_cpu->iowait_boost >>= 2;
 		if (sg_cpu->iowait_boost < IOWAIT_BOOST_MIN) {
 			sg_cpu->iowait_boost = 0;
 			return;
