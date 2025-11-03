@@ -157,6 +157,7 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 	unsigned int freq = arch_scale_freq_invariant() ?
 				policy->cpuinfo.max_freq : policy->cur;
 	unsigned long next_freq = 0;
+	unsigned int idx, l_freq, h_freq;
 
 	util = map_util_perf(util);
 	if (util < (max * 50 / 1024)) { // 利用率低于1%
@@ -177,7 +178,21 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 		return sg_policy->next_freq;
 
 	sg_policy->cached_raw_freq = freq;
-	return cpufreq_driver_resolve_freq(policy, freq);
+	l_freq = cpufreq_driver_resolve_freq(policy, freq);
+	idx = cpufreq_frequency_table_target(policy, freq, CPUFREQ_RELATION_H);
+	h_freq = policy->freq_table[idx].frequency;
+	h_freq = clamp(h_freq, policy->min, policy->max);
+	if (l_freq <= h_freq || l_freq == policy->min)
+		return l_freq;
+
+	/*
+	 * Use the frequency step below if the calculated frequency is <20%
+	 * higher than it.
+	 */
+	if (mult_frac(100, freq - h_freq, l_freq - h_freq) < 20)
+		return h_freq;
+
+	return l_freq;
 }
 
 static void sugov_get_util(struct sugov_cpu *sg_cpu)
@@ -314,19 +329,6 @@ static void sugov_iowait_apply(struct sugov_cpu *sg_cpu, u64 time,
 		sg_cpu->util = boost;
 }
 
-#ifdef CONFIG_NO_HZ_COMMON
-static bool sugov_cpu_is_busy(struct sugov_cpu *sg_cpu)
-{
-	unsigned long idle_calls = tick_nohz_get_idle_calls_cpu(sg_cpu->cpu);
-	bool ret = idle_calls == sg_cpu->saved_idle_calls;
-
-	sg_cpu->saved_idle_calls = idle_calls;
-	return ret;
-}
-#else
-static inline bool sugov_cpu_is_busy(struct sugov_cpu *sg_cpu) { return false; }
-#endif /* CONFIG_NO_HZ_COMMON */
-
 /*
  * Make sugov_should_update_freq() ignore the rate limit when DL
  * has increased the utilization.
@@ -360,7 +362,6 @@ static void sugov_update_single_freq(struct update_util_data *hook, u64 time,
 {
 	struct sugov_cpu *sg_cpu = container_of(hook, struct sugov_cpu, update_util);
 	struct sugov_policy *sg_policy = sg_cpu->sg_policy;
-	unsigned int cached_freq = sg_policy->cached_raw_freq;
 	unsigned long max_cap;
 	unsigned int next_f;
 
@@ -370,20 +371,6 @@ static void sugov_update_single_freq(struct update_util_data *hook, u64 time,
 		return;
 
 	next_f = get_next_freq(sg_policy, sg_cpu->util, max_cap);
-	/*
-	 * Do not reduce the frequency if the CPU has not been idle
-	 * recently, as the reduction is likely to be premature then.
-	 *
-	 * Except when the rq is capped by uclamp_max.
-	 */
-	if (!uclamp_rq_is_capped(cpu_rq(sg_cpu->cpu)) &&
-	    sugov_cpu_is_busy(sg_cpu) && next_f < sg_policy->next_freq &&
-	    !sg_policy->need_freq_update) {
-		next_f = sg_policy->next_freq;
-
-		/* Restore cached freq as next_freq has changed */
-		sg_policy->cached_raw_freq = cached_freq;
-	}
 
 	if (!sugov_update_next_freq(sg_policy, time, next_f))
 		return;
@@ -406,7 +393,6 @@ static void sugov_update_single_perf(struct update_util_data *hook, u64 time,
 				     unsigned int flags)
 {
 	struct sugov_cpu *sg_cpu = container_of(hook, struct sugov_cpu, update_util);
-	unsigned long prev_util = sg_cpu->util;
 	unsigned long max_cap;
 
 	/*
@@ -423,16 +409,6 @@ static void sugov_update_single_perf(struct update_util_data *hook, u64 time,
 
 	if (!sugov_update_single_common(sg_cpu, time, max_cap, flags))
 		return;
-
-	/*
-	 * Do not reduce the target performance level if the CPU has not been
-	 * idle recently, as the reduction is likely to be premature then.
-	 *
-	 * Except when the rq is capped by uclamp_max.
-	 */
-	if (!uclamp_rq_is_capped(cpu_rq(sg_cpu->cpu)) &&
-	    sugov_cpu_is_busy(sg_cpu) && sg_cpu->util < prev_util)
-		sg_cpu->util = prev_util;
 
 	cpufreq_driver_adjust_perf(sg_cpu->cpu, map_util_perf(sg_cpu->bw_dl),
 				   map_util_perf(sg_cpu->util), max_cap);
@@ -727,7 +703,7 @@ static int sugov_init(struct cpufreq_policy *policy)
 		goto stop_kthread;
 	}
 
-	tunables->rate_limit_us = cpufreq_policy_transition_delay_us(policy);
+	tunables->rate_limit_us = 2000;
 
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;
