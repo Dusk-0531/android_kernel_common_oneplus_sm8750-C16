@@ -243,8 +243,4 @@ source "drivers/hte/Kconfig"
 
 source "drivers/cdx/Kconfig"
 
-source "drivers/auth_ctl/Kconfig"
-
-source "drivers/freq_qos_arbiter/Kconfig"
-
 endmenu
