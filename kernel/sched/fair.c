@@ -8356,7 +8356,6 @@ static void task_dead_fair(struct task_struct *p)
 static int
 balance_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
-	trace_android_rvh_balance_fair(rq, prev, rf);
 	if (rq->nr_running)
 		return 1;
 

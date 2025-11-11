@@ -124,4 +124,3 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(android_rvh_set_iowait);
 EXPORT_TRACEPOINT_SYMBOL_GPL(android_vh_prio_inheritance);
 EXPORT_TRACEPOINT_SYMBOL_GPL(android_vh_prio_restore);
 EXPORT_TRACEPOINT_SYMBOL_GPL(android_vh_set_task_comm);
-EXPORT_TRACEPOINT_SYMBOL_GPL(android_rvh_balance_fair);
