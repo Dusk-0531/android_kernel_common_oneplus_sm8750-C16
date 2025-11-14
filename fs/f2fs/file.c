@@ -843,9 +843,16 @@ int f2fs_truncate_blocks(struct inode *inode, u64 from, bool lock)
 #endif
 
 	err = f2fs_do_truncate_blocks(inode, free_from, lock);
-	if (err)
-		return err;
-
+	if (err) {
+			/*
+			 * Always truncate page #0 to avoid page cache
+			 * leak in evict() path.
+			 */
+			truncate_inode_pages_range(inode->i_mapping,
+					F2FS_BLK_TO_BYTES(0),
+					F2FS_BLK_END_BYTES(0));
+			return err;
+		}
 #ifdef CONFIG_F2FS_FS_COMPRESSION
 	/*
 	 * For compressed file, after release compress blocks, don't allow write
