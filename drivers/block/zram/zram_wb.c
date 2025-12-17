@@ -17,8 +17,19 @@ static DECLARE_WAIT_QUEUE_HEAD(wb_wq);
 static struct zram_wb_request_list wb_req_list;
 static struct bio_set zram_wb_bs;
 
+/* 
+ * front_pad: 在 bio 结构之前预留空间存放 zram_wb_request
+ * 需要对齐以保证 bio 结构的正确对齐
+ */
+#define ZRAM_WB_FRONT_PAD \
+	roundup(sizeof(struct zram_wb_request), __alignof__(struct bio))
+
+/*
+ * 从 bio 指针获取其前面的 zram_wb_request 结构
+ * bio 分配时在其前面预留了 ZRAM_WB_FRONT_PAD 字节
+ */
 #define bio_to_zram_wb_request(bio) \
-	((struct zram_wb_request *)bio_data(bio))
+	((struct zram_wb_request *)((char *)(bio) - ZRAM_WB_FRONT_PAD))
 
 unsigned long alloc_block_bdev(struct zram *zram)
 {
@@ -190,13 +201,18 @@ struct zram_wb_request *alloc_wb_request(struct zram *zram,
 	if (!page)
 		return ERR_PTR(-ENOMEM);
 
-	bio = bio_alloc_bioset(zram->bdev, 1, REQ_OP_WRITE, GFP_NOIO | __GFP_NOWARN,
+	/*
+	 * 使用 bioset 分配 bio,front_pad 空间会被自动分配在 bio 之前
+	 * 需要 BIOSET_NEED_BVECS 标志,因为我们手动添加 page
+	 */
+	bio = bio_alloc_bioset(zram->bdev, 1, REQ_OP_WRITE, GFP_NOIO,
 			       &zram_wb_bs);
 	if (!bio) {
 		err = -ENOMEM;
 		goto out_free_page;
 	}
 
+	/* 通过宏访问 bio 前面的 zram_wb_request 结构 */
 	req = bio_to_zram_wb_request(bio);
 	req->zram = zram;
 	req->pps = pps;
@@ -219,13 +235,29 @@ void free_wb_request(struct zram_wb_request *req)
 	struct bio *bio = req->bio;
 	struct page *page = bio_first_page_all(bio);
 
-	__free_page(page);
+	if (page)
+		__free_page(page);
+	/*
+	 * bio_put 会自动释放 bio 以及其 front_pad 空间
+	 * 不需要单独释放 req
+	 */
 	bio_put(bio);
 }
 
 int setup_zram_writeback(void)
 {
-	if (bioset_init(&zram_wb_bs, 1, sizeof(struct zram_wb_request), BIOSET_NEED_BVECS)) {
+	/*
+	 * 初始化 bioset:
+	 * - pool_size: 64,预分配的 bio 数量,用于减少分配开销
+	 * - front_pad: ZRAM_WB_FRONT_PAD,在每个 bio 之前预留空间
+	 * - flags: BIOSET_NEED_BVECS,需要 bio vecs 支持
+	 * 
+	 * 参考 dm-table.c 的做法,使用 front_pad 可以:
+	 * 1. 避免为 zram_wb_request 单独分配内存
+	 * 2. 提高缓存局部性(request 和 bio 内存连续)
+	 * 3. 简化内存管理(一起分配一起释放)
+	 */
+	if (bioset_init(&zram_wb_bs, 64, ZRAM_WB_FRONT_PAD, BIOSET_NEED_BVECS)) {
 		pr_err("Unable to init zram_wb_bs\n");
 		return -1;
 	}
