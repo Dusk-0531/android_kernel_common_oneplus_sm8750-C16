@@ -52,6 +52,7 @@ struct io_worker {
 	struct list_head all_list;
 	struct task_struct *task;
 	struct io_wq *wq;
+	struct io_wq_acct *acct;
 
 	struct io_wq_work *cur_work;
 	struct io_wq_work *next_work;
