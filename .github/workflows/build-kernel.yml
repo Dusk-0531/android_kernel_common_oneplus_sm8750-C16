@@ -149,8 +149,7 @@ jobs:
           echo "CONFIG_TCP_CONG_NV=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_WESTWOOD=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_HTCP=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BRUTAL=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> ./arch/arm64/configs/gki_defconfig
+          echo 'CONFIG_DEFAULT_TCP_CONG="cubic"' >> ./arch/arm64/configs/gki_defconfig
           
           # Enable O2 optimization
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./arch/arm64/configs/gki_defconfig
