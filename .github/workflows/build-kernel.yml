@@ -140,18 +140,6 @@ jobs:
           echo "CONFIG_IP6_NF_NAT=y" >> ./arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> ./arch/arm64/configs/gki_defconfig
           
-          # Enable TCP congestion control algorithms
-          echo "Enabling TCP congestion control algorithms..."
-          echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BBR=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_CUBIC=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_VEGAS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_NV=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_WESTWOOD=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_HTCP=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BRUTAL=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> ./arch/arm64/configs/gki_defconfig
-          
           # Enable O2 optimization
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./arch/arm64/configs/gki_defconfig
           
@@ -250,7 +238,6 @@ jobs:
             - ✅ AIOS/ADIOS IO Scheduler
             - ✅ LZ4 1.10.0 & zstd 1.5.7 Compression
             - ✅ Network Enhancements (IP_SET, IPv6 NAT, etc.)
-            - ✅ TCP Congestion Control (BBR, CUBIC, VEGAS, etc.)
             - ✅ O2 Optimization
             - ❌ No KernelSU
             - ❌ No SUSFS
