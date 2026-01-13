@@ -33,10 +33,11 @@ jobs:
           sudo apt purge man-db -y || true
           sudo rm -rf /var/lib/man-db/auto-update
           sudo apt update
-          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache aria2 &
+          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache aria2 rsync &
           
           echo "Copying kernel source..."
-          cp -r "$GITHUB_WORKSPACE" common
+          mkdir -p common
+          rsync -a --exclude='.git' --exclude='kernel_workspace' "$GITHUB_WORKSPACE/" common/
           
           echo "Cloning llvm-clang18 toolchain..."
           mkdir -p clang18
