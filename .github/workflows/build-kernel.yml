@@ -1,0 +1,266 @@
+name: Build OnePlus SM8750 Kernel
+
+env:
+  TZ: Asia/Shanghai
+  ANDROID_VERSION: 'android15'
+  KERNEL_VERSION: '6.6'
+  KERNEL_NAME: 'sm8750-6.6.89-C16'
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build environment and clone toolchain
+        run: |
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace
+          
+          echo "Installing dependencies..."
+          sudo apt-mark hold firefox
+          sudo apt-mark hold libc-bin
+          sudo apt purge man-db -y || true
+          sudo rm -rf /var/lib/man-db/auto-update
+          sudo apt update
+          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache aria2 rsync &
+          
+          echo "Copying kernel source..."
+          mkdir -p common
+          rsync -a --exclude='.git' --exclude='kernel_workspace' "$GITHUB_WORKSPACE/" common/
+          
+          echo "Cloning llvm-clang18 toolchain..."
+          mkdir -p clang18
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang18-r510928/clang-r510928.zip -o clang.zip
+          unzip -q clang.zip -d clang18
+          rm -rf clang.zip &
+          
+          echo "Cloning build tools..."
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang18-r510928/build-tools.zip -o build-tools.zip
+          unzip -q build-tools.zip
+          rm -rf build-tools.zip &
+          
+          wait
+          echo "Toolchain setup complete!"
+          echo "Removing ABI protection & dirty suffix..."
+          rm -f common/android/abi_gki_protected_exports_* || true
+          for f in common/scripts/setlocalversion; do
+            sed -i 's/ -dirty//g' "$f"
+            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+      - name: Configure ccache
+        run: |
+          echo "CCACHE_DIR=$HOME/.ccache_sm8750" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=3G" >> $GITHUB_ENV
+          echo "Current disk space:"
+          df -h
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        id: ccache-restore
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-sm8750-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-sm8750-${{ runner.os }}-
+            ccache-sm8750-
+
+      - name: Initialize ccache
+        run: |
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_HARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
+          
+          mkdir -p "$CCACHE_DIR"
+          echo "Configuring ccache size: $CCACHE_MAXSIZE"
+          ccache -M "$CCACHE_MAXSIZE"
+          ccache -o compression=true
+          echo "Initial ccache status:"
+          ccache -s
+
+      - name: Apply LZ4 1.10.0 & zstd 1.5.7 patches
+        run: |
+          echo "Applying LZ4 1.10.0 & zstd 1.5.7 patches..."
+          cd kernel_workspace
+          git clone --depth=1 https://github.com/cctv18/oppo_oplus_realme_sm8750.git
+          cp ./oppo_oplus_realme_sm8750/zram_patch/001-lz4.patch ./common/
+          cp ./oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./common/lib
+          cp ./oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch ./common/
+          cd ./common
+          git apply -p1 < 001-lz4.patch || true
+          patch -p1 < 002-zstd.patch || true
+          echo "LZ4 and zstd patches applied successfully!"
+
+      - name: Configure kernel
+        run: |
+          cd kernel_workspace/common
+          
+          # Enable AIOS/ADIOS scheduler
+          echo "Enabling AIOS/ADIOS IO scheduler..."
+          echo "CONFIG_MQ_IOSCHED_ADIOS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y" >> ./arch/arm64/configs/gki_defconfig
+          
+          # Enable network enhancements
+          echo "Enabling network enhancements..."
+          echo "CONFIG_BPF_STREAM_PARSER=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_SET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_MAX=65534" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_BITMAP_IP=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_BITMAP_IPMAC=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_BITMAP_PORT=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IP=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPMARK=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPPORT=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPPORTIP=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPPORTNET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPMAC=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_MAC=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETPORTNET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETNET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETPORT=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETIFACE=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_LIST_SET=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP6_NF_NAT=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> ./arch/arm64/configs/gki_defconfig
+          
+          # Enable TCP congestion control algorithms
+          echo "Enabling TCP congestion control algorithms..."
+          echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_BBR=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_CUBIC=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_VEGAS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_NV=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_WESTWOOD=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_HTCP=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_BRUTAL=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> ./arch/arm64/configs/gki_defconfig
+          
+          # Enable O2 optimization
+          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./arch/arm64/configs/gki_defconfig
+          
+          # Disable defconfig check
+          sed -i 's/check_defconfig//' ./build.config.gki
+          
+          # Skip headers installation
+          echo "CONFIG_HEADERS_INSTALL=n" >> ./arch/arm64/configs/gki_defconfig
+          
+          # Set kernel version suffix
+          echo "Setting kernel version suffix..."
+          for f in ./scripts/setlocalversion; do
+            sed -i "\$s|echo \"\\\$res\"|echo \"-${{ env.KERNEL_NAME }}\"|" "$f"
+          done
+          sed -i 's/${scm_version}//' ./scripts/setlocalversion
+          echo "CONFIG_LOCALVERSION_AUTO=n" >> ./arch/arm64/configs/gki_defconfig
+
+      - name: Build kernel
+        run: |
+          WORKDIR="$(pwd)"
+          export PATH="/usr/lib/ccache:$PATH"
+          export PATH="$WORKDIR/kernel_workspace/clang18/bin:$PATH"
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
+          CLANG_DIR="$WORKDIR/kernel_workspace/clang18/bin"
+          CLANG_VERSION="$($CLANG_DIR/clang --version | head -n 1)"
+          LLD_VERSION="$($CLANG_DIR/ld.lld --version | head -n 1)"
+          echo "Compiler information:"
+          echo "Clang: $CLANG_VERSION"
+          echo "LLD: $LLD_VERSION"
+          
+          export CCACHE_LOGFILE="${{ github.workspace }}/kernel_workspace/ccache.log"
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_HARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="3G"
+          echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
+          
+          cd kernel_workspace/common
+          
+          # Clean up disk space while building
+          sudo rm -rf /usr/share/dotnet &
+          sudo rm -rf /usr/local/lib/android &
+          sudo rm -rf /opt/ghc &
+          sudo rm -rf /opt/hostedtoolcache/CodeQL &
+          
+          # Build kernel
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+          
+          echo "Kernel build complete!"
+          echo "Ccache statistics:"
+          ccache -s
+          echo "Disk space after build:"
+          df -h
+
+      - name: Package with AnyKernel3
+        run: |
+          cd kernel_workspace
+          git clone https://github.com/cctv18/AnyKernel3 --depth=1
+          rm -rf ./AnyKernel3/.git
+          cd AnyKernel3
+          cp ../common/out/arch/arm64/boot/Image ./Image
+          if [[ ! -f ./Image ]]; then
+            echo "Kernel image not found! Build may have failed."
+            exit 1
+          fi
+          
+          # Create zip package
+          TIME="$(TZ='Asia/Shanghai' date +'%Y%m%d-%H%M%S')"
+          zip -r ../AnyKernel3_SM8750_${{ env.KERNEL_VERSION }}_${TIME}.zip ./*
+          echo "Package created successfully!"
+
+      - name: Upload kernel package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel_AK3_Package
+          path: ${{ github.workspace }}/kernel_workspace/AnyKernel3_*.zip
+          retention-days: 30
+
+      - name: Create release (on push to main/master)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "build-${{ github.run_number }}"
+          name: "OnePlus SM8750 Kernel Build #${{ github.run_number }}"
+          body: |
+            ### 📱 OnePlus SM8750 Kernel Build
+            
+            - Kernel Version: ${{ env.KERNEL_VERSION }}.89
+            - Build Time: ${{ github.event.head_commit.timestamp }}
+            - Commit: ${{ github.sha }}
+            
+            ### Features:
+            - ✅ AIOS/ADIOS IO Scheduler
+            - ✅ LZ4 1.10.0 & zstd 1.5.7 Compression
+            - ✅ Network Enhancements (IP_SET, IPv6 NAT, etc.)
+            - ✅ TCP Congestion Control (BBR, CUBIC, VEGAS, etc.)
+            - ✅ O2 Optimization
+            - ❌ No KernelSU
+            - ❌ No SUSFS
+            
+            ### Installation:
+            1. Flash via TWRP/Custom Recovery
+            2. Or use HorizonKernelFlasher with root access
+            
+            ⚠️ **Warning**: Flashing kernels has risks. Backup your boot partition first!
+          draft: false
+          prerelease: false
+          files: |
+            ${{ github.workspace }}/kernel_workspace/AnyKernel3_*.zip

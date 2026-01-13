@@ -99,6 +99,7 @@ modules.order
 !.cocciconfig
 !.get_maintainer.ignore
 !.gitattributes
+!.github
 !.gitignore
 !.kunitconfig
 !.mailmap
@@ -175,3 +176,7 @@ kernel/locking/oplus_locking.c
 kernel/locking/sa_common_struct.h
 *.orig
 *.rej
+
+# Build workspace
+/kernel_workspace/
+*.zip
