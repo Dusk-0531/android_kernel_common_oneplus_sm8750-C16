@@ -6,6 +6,7 @@
 
 ### ✅ 保留的特性
 - **AIOS/ADIOS IO 调度器**: 提升 IO 读写性能的高级调度器
+- **LZ4 1.10.0 & zstd 1.5.7 压缩**: 优化的压缩算法支持
 - **网络功能增强**: 
   - IP_SET 支持 (用于高效的大规模 IP 地址管理)
   - NETFILTER 扩展 (支持 iptables 等高级网络功能)
@@ -24,6 +25,7 @@
 - **KernelSU**: 不包含任何 KernelSU 分支 (SukiSU, ReSukiSU, KernelSU Next, MKSU, 原版 KSU)
 - **SUSFS**: 不包含 SUSFS 隐藏功能支持
 - **KPM**: 不包含 KernelPatch Manager
+- **LZ4KD**: 不包含 LZ4KD 补丁
 
 ## 使用方法
 
