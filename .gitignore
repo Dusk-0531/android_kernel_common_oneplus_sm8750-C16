@@ -175,3 +175,7 @@ kernel/locking/oplus_locking.c
 kernel/locking/sa_common_struct.h
 *.orig
 *.rej
+
+# Build workspace
+/kernel_workspace/
+*.zip
